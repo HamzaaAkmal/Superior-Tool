@@ -81,6 +81,11 @@ $(document).ready(function() {
 
     // Check for class selection modal
     checkClassSelectionModal();
+    
+    // Check if we're on admin page and initialize admin panel
+    if (window.location.pathname === '/admin') {
+        showSection('admin-panel');
+    }
 });
 
 // Load dashboard data
@@ -96,6 +101,9 @@ function loadDashboardData() {
             if (totalTeachers) totalTeachers.textContent = data.teacher_count || 0;
             if (currentSession) currentSession.textContent = data.semester_info || 'No Data';
             if (teacherCount) teacherCount.textContent = `${data.teacher_count || 0} Teachers`;
+            
+            // Load banner after dashboard data is loaded
+            loadBanner();
         })
         .catch(error => {
             console.error('Error loading dashboard data:', error);
@@ -819,49 +827,58 @@ document.addEventListener('click', function(event) {
 
 // Section navigation
 function showSection(sectionId) {
-    // Hide all sections
-    const sections = document.querySelectorAll('.content-section');
-    sections.forEach(section => {
-        section.classList.remove('active');
-    });
+    // Show mini loader
+    showMiniLoader();
     
-    // Show selected section
-    document.getElementById(sectionId).classList.add('active');
-    
-    // Update sidebar active state
-    const menuItems = document.querySelectorAll('.sidebar-menu a');
-    menuItems.forEach(item => item.classList.remove('active'));
+    // Small delay to show loader animation
+    setTimeout(() => {
+        // Hide all sections
+        const sections = document.querySelectorAll('.content-section');
+        sections.forEach(section => {
+            section.classList.remove('active');
+        });
+        
+        // Show selected section
+        document.getElementById(sectionId).classList.add('active');
+        
+        // Update sidebar active state
+        const menuItems = document.querySelectorAll('.sidebar-menu a');
+        menuItems.forEach(item => item.classList.remove('active'));
 
-    // Activate the sidebar link with matching data-section or id
-    let activated = false;
-    menuItems.forEach(item => {
-        const ds = item.getAttribute('data-section');
-        if (ds === sectionId) {
-            item.classList.add('active');
-            activated = true;
+        // Activate the sidebar link with matching data-section or id
+        let activated = false;
+        menuItems.forEach(item => {
+            const ds = item.getAttribute('data-section');
+            if (ds === sectionId) {
+                item.classList.add('active');
+                activated = true;
+            }
+        });
+
+        // Fallback: if the click event provided a target, try to activate it
+        try {
+            if (!activated && window.event && window.event.target) {
+                const tgt = window.event.target.closest('a');
+                if (tgt) tgt.classList.add('active');
+            }
+        } catch (e) { /* ignore */ }
+
+        // Close sidebar for small screens for better UX
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        if (sidebar && sidebar.classList.contains('active')) {
+            sidebar.classList.remove('active');
+            if (overlay) overlay.classList.remove('active');
         }
-    });
 
-    // Fallback: if the click event provided a target, try to activate it
-    try {
-        if (!activated && window.event && window.event.target) {
-            const tgt = window.event.target.closest('a');
-            if (tgt) tgt.classList.add('active');
+        // Handle admin panel initialization
+        if (sectionId === 'admin-panel') {
+            initializeAdminPanel();
         }
-    } catch (e) { /* ignore */ }
-
-    // Close sidebar for small screens for better UX
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
-    if (sidebar && sidebar.classList.contains('active')) {
-        sidebar.classList.remove('active');
-        if (overlay) overlay.classList.remove('active');
-    }
-
-    // Handle admin panel initialization
-    if (sectionId === 'admin-panel') {
-        initializeAdminPanel();
-    }
+        
+        // Hide mini loader
+        hideMiniLoader();
+    }, 300);
 }
 
 // Admin Panel Functions
@@ -909,6 +926,7 @@ function showAdminDashboard() {
     document.getElementById('admin-change-credentials-section').style.display = 'none';
     document.getElementById('admin-dashboard-section').style.display = 'block';
     clearAdminMessages();
+    loadBannerSettings();
 }
 
 function adminLogin() {
@@ -1134,11 +1152,21 @@ function clearAdminMessages() {
 }
 
 function setButtonLoading(button, loading) {
+    // Check if button is in admin panel
+    const isAdminButton = button.closest('#admin-panel') !== null;
+    
     if (loading) {
         button.classList.add('loading');
         button.disabled = true;
         button.setAttribute('data-original-text', button.innerHTML);
-        button.innerHTML = '<span class="loading"></span> Loading...';
+        
+        if (isAdminButton) {
+            // For admin buttons, just disable and add loading class (CSS handles animation)
+            button.innerHTML = 'Loading...';
+        } else {
+            // For regular buttons, add the loading span
+            button.innerHTML = '<span class="loading"></span> Loading...';
+        }
     } else {
         button.classList.remove('loading');
         button.disabled = false;
@@ -1645,4 +1673,212 @@ function mergeConsecutiveSlots(entries) {
     // Add the last entry
     merged.push(current);
     return merged;
+}
+
+// Mini Loader Functions
+function showMiniLoader() {
+    const loader = document.getElementById('mini-loader');
+    if (loader) {
+        loader.style.display = 'block';
+    }
+}
+
+function hideMiniLoader() {
+    const loader = document.getElementById('mini-loader');
+    if (loader) {
+        loader.style.display = 'none';
+    }
+}
+
+// Update Banner Functions
+function loadBanner() {
+    fetch('/banner')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            const banner = document.getElementById('update-banner');
+            const bannerText = document.getElementById('banner-text');
+            
+            if (data.enabled && data.text && banner && bannerText) {
+                // Replace {date} placeholder with current date
+                const currentDate = new Date().toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+                const displayText = data.text.replace(/{date}/g, currentDate);
+                
+                bannerText.textContent = displayText;
+                banner.style.display = 'block';
+                
+                // Add slide-in animation
+                banner.classList.add('banner-visible');
+            } else if (banner) {
+                banner.style.display = 'none';
+                banner.classList.remove('banner-visible');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading banner:', error);
+            // Hide banner on error to prevent broken display
+            const banner = document.getElementById('update-banner');
+            if (banner) {
+                banner.style.display = 'none';
+            }
+        });
+}
+
+function loadLastUpdateDate() {
+    fetch('/dashboard')
+        .then(response => response.json())
+        .then(data => {
+            const dateElement = document.getElementById('last-update-date');
+            if (dateElement && data.last_updated && data.last_updated !== 'N/A') {
+                const date = new Date(data.last_updated);
+                const formattedDate = date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                dateElement.textContent = formattedDate;
+            } else {
+                dateElement.textContent = 'N/A';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading last update date:', error);
+            const dateElement = document.getElementById('last-update-date');
+            if (dateElement) {
+                dateElement.textContent = 'N/A';
+            }
+        });
+}
+
+function hideUpdateBanner() {
+    const banner = document.getElementById('update-banner');
+    if (banner) {
+        banner.style.display = 'none';
+    }
+}
+
+// Banner Management Functions
+function loadBannerSettings() {
+    fetch('/admin/banner')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('banner-text-input').value = data.text;
+                document.getElementById('banner-enabled').checked = data.enabled;
+                updateBannerPreview();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading banner settings:', error);
+        });
+}
+
+function updateBanner() {
+    const text = document.getElementById('banner-text-input').value.trim();
+    const enabled = document.getElementById('banner-enabled').checked;
+    
+    if (!text) {
+        showAdminMessage('banner-message', 'Banner text cannot be empty', 'error');
+        return;
+    }
+    
+    const updateBtn = event.target;
+    setButtonLoading(updateBtn, true);
+    
+    fetch('/admin/banner', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            text: text,
+            enabled: enabled
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        setButtonLoading(updateBtn, false);
+        
+        if (data.success) {
+            showAdminMessage('banner-message', data.message || 'Banner updated successfully!', 'success');
+            updateBannerPreview();
+            // Reload banner on main page
+            loadBanner();
+        } else {
+            showAdminMessage('banner-message', data.message || 'Failed to update banner', 'error');
+        }
+    })
+    .catch(error => {
+        setButtonLoading(updateBtn, false);
+        console.error('Banner update error:', error);
+        
+        // Check if it's a network error or server error
+        if (error.message.includes('HTTP error')) {
+            showAdminMessage('banner-message', 'Server error occurred. Please try again.', 'error');
+        } else {
+            showAdminMessage('banner-message', 'Network error occurred. Please check your connection.', 'error');
+        }
+    });
+}
+
+function resetBanner() {
+    document.getElementById('banner-text-input').value = 'Portal has been updated with latest timetable on {date}';
+    document.getElementById('banner-enabled').checked = true;
+    updateBannerPreview();
+    showAdminMessage('banner-message', 'Banner reset to default settings', 'info');
+}
+
+function updateBannerPreview() {
+    const text = document.getElementById('banner-text-input').value;
+    const enabled = document.getElementById('banner-enabled').checked;
+    
+    const previewBanner = document.getElementById('banner-preview');
+    const previewText = document.getElementById('preview-text');
+    const previewDate = document.getElementById('preview-date');
+    
+    if (enabled) {
+        previewBanner.style.display = 'block';
+        // Replace {date} with current date for preview
+        const displayText = text.replace('{date}', new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        }));
+        previewText.textContent = displayText;
+        previewDate.textContent = new Date().toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    } else {
+        previewBanner.style.display = 'none';
+    }
+}
+
+// Admin Navigation Function
+function navigateToAdmin() {
+    // Show mini loader
+    showMiniLoader();
+    
+    // Navigate to admin page
+    setTimeout(() => {
+        window.location.href = '/admin';
+    }, 300);
 }

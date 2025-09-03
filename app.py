@@ -113,6 +113,33 @@ prefix_hierarchy = ["Ms", "Mrs", "Miss", "Ma'am", "Maam", "Mr", "Sir", "Dr", "Pr
 last_modified = None
 current_csv_file = None
 
+# Banner settings
+banner_settings = {
+    'text': 'Portal has been updated with latest timetable on {date}',
+    'enabled': True
+}
+
+def load_banner_settings():
+    """Load banner settings from file"""
+    global banner_settings
+    try:
+        if os.path.exists('banner_settings.json'):
+            with open('banner_settings.json', 'r') as f:
+                banner_settings.update(json.load(f))
+    except Exception as e:
+        print(f"Error loading banner settings: {e}")
+
+def save_banner_settings():
+    """Save banner settings to file"""
+    try:
+        with open('banner_settings.json', 'w') as f:
+            json.dump(banner_settings, f, indent=2)
+    except Exception as e:
+        print(f"Error saving banner settings: {e}")
+
+# Load banner settings on startup
+load_banner_settings()
+
 def get_latest_xlsx_file():
     """Get the latest xlsx file from uploads/xlsx folder"""
     xlsx_files = glob.glob('uploads/xlsx/*.xlsx')
@@ -356,6 +383,68 @@ def extract_semester_info(filename):
         return f"{season}-{year}"
     return "Current Semester"
 
+@app.route('/admin/banner', methods=['GET'])
+def get_banner_settings():
+    """Get current banner settings"""
+    return jsonify({
+        'success': True,
+        'text': banner_settings['text'],
+        'enabled': banner_settings['enabled']
+    })
+
+@app.route('/admin/banner', methods=['POST'])
+def update_banner_settings():
+    """Update banner settings"""
+    # Check if accessing from /admin route
+    referrer = request.headers.get('Referer', ' ')
+    if '/admin' not in referrer and request.environ.get('HTTP_REFERER', '').find('/admin') == -1:
+        return jsonify({'success': False, 'message': 'Access denied. Please use /admin route.'}), 403
+    
+    # Check session timeout
+    current_time = datetime.now().timestamp()
+    if session.get('admin_logged_in'):
+        login_time = session.get('admin_login_time', 0)
+        if current_time - login_time > 1800:  # 30 minutes
+            session.clear()
+            return jsonify({'success': False, 'message': 'Session expired. Please login again.'}), 401
+    else:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    body = request.get_json() or {}
+    text = body.get('text', '').strip()
+    enabled = body.get('enabled', True)
+
+    if not text:
+        return jsonify({'success': False, 'message': 'Banner text cannot be empty'}), 400
+
+    banner_settings['text'] = text
+    banner_settings['enabled'] = enabled
+    save_banner_settings()
+
+    return jsonify({'success': True, 'message': 'Banner settings updated successfully'})
+
+@app.route('/banner')
+def get_banner():
+    """Get banner data for display"""
+    if not banner_settings['enabled']:
+        return jsonify({'enabled': False})
+    
+    # Replace {date} placeholder with actual date
+    text = banner_settings['text']
+    if '{date}' in text:
+        # Get last update date from dashboard data
+        csv_file = get_current_csv_file()
+        if csv_file and os.path.exists(csv_file):
+            last_updated = datetime.fromtimestamp(os.path.getmtime(csv_file)).strftime('%b %d, %Y %I:%M %p')
+        else:
+            last_updated = 'N/A'
+        text = text.replace('{date}', last_updated)
+    
+    return jsonify({
+        'enabled': True,
+        'text': text
+    })
+
 @app.route('/timetable')
 def get_timetable():
     name = request.args.get('name', '').upper()
@@ -425,6 +514,7 @@ def dashboard():
     if not csv_file or not os.path.exists(csv_file):
         teacher_names_list = []
         semester_info = "No Data"
+        last_updated = "N/A"
     else:
         # Check if file has been modified
         current_modified = os.path.getmtime(csv_file)
@@ -436,11 +526,14 @@ def dashboard():
         teacher_names_list = sort_teachers_by_prefix_and_name(teacher_names)
         # Extract semester info from filename
         semester_info = extract_semester_info(csv_file)
+        # Get last updated time
+        last_updated = datetime.fromtimestamp(current_modified).strftime('%Y-%m-%d %H:%M:%S')
 
     return jsonify({
         'teacher_count': len(teacher_names_list),
         'semester_info': semester_info,
-        'has_data': bool(csv_file and os.path.exists(csv_file))
+        'has_data': bool(csv_file and os.path.exists(csv_file)),
+        'last_updated': last_updated
     })
 
 def parse_multiple_teachers(teachers_str):
