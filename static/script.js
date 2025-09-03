@@ -86,6 +86,35 @@ $(document).ready(function() {
     if (window.location.pathname === '/admin') {
         showSection('admin-panel');
     }
+
+    // Check if about section is currently visible and load its data
+    const aboutSection = document.getElementById('about');
+    if (aboutSection && aboutSection.classList.contains('active')) {
+        loadAboutSectionData();
+    }
+
+    // Check if teacher timetable section is currently visible and add export button if teacher selected
+    const teacherSection = document.getElementById('teacher-timetable');
+    if (teacherSection && teacherSection.classList.contains('active')) {
+        setTimeout(() => {
+            const container = document.getElementById('teacher-timetable-container');
+            const teacherSelect = document.getElementById('teacher-search');
+            const existingBtn = document.getElementById('export-teacher-btn');
+
+            if (container && teacherSelect) {
+                const teacherSelected = teacherSelect.value && teacherSelect.value.trim() !== '';
+
+                if (teacherSelected && !existingBtn) {
+                    const btn = document.createElement('button');
+                    btn.id = 'export-teacher-btn';
+                    btn.className = 'btn btn-outline-success mb-3';
+                    btn.innerHTML = '<i class="fas fa-download mr-2"></i>Export / Print Teacher Timetable';
+                    btn.onclick = exportTeacherTimetable;
+                    container.parentNode.insertBefore(btn, container);
+                }
+            }
+        }, 100);
+    }
 });
 
 // Load dashboard data
@@ -97,17 +126,69 @@ function loadDashboardData() {
             const totalTeachers = document.getElementById('total-teachers');
             const currentSession = document.getElementById('current-session');
             const teacherCount = document.getElementById('teacher-count');
-            
+
             if (totalTeachers) totalTeachers.textContent = data.teacher_count || 0;
             if (currentSession) currentSession.textContent = data.semester_info || 'No Data';
             if (teacherCount) teacherCount.textContent = `${data.teacher_count || 0} Teachers`;
-            
+
+            // Update about section elements if they exist
+            updateAboutSectionData(data);
+
             // Load banner after dashboard data is loaded
             loadBanner();
         })
         .catch(error => {
             console.error('Error loading dashboard data:', error);
         });
+}
+
+// Update about section with dashboard data
+function updateAboutSectionData(data) {
+
+    // Update current timetable file name
+    const currentFileElement = document.getElementById('current-timetable-file');
+    if (currentFileElement) {
+        if (data && data.semester_info && data.semester_info !== 'No Data' && data.semester_info !== '') {
+            currentFileElement.textContent = data.semester_info;
+        } else {
+            currentFileElement.textContent = 'No file loaded';
+        }
+    } else {
+        console.error('current-timetable-file element not found');
+    }
+
+    // Update last updated time
+    const lastUpdatedElement = document.getElementById('file-last-updated');
+    if (lastUpdatedElement) {
+        if (data.last_updated && data.last_updated !== 'N/A') {
+            try {
+                // Format the date for better readability
+                const date = new Date(data.last_updated);
+                if (!isNaN(date.getTime())) {
+                    const formattedDate = date.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    lastUpdatedElement.textContent = formattedDate;
+                    console.log('Updated last updated to:', formattedDate);
+                } else {
+                    lastUpdatedElement.textContent = 'Invalid date format';
+                    console.error('Invalid date format:', data.last_updated);
+                }
+            } catch (error) {
+                lastUpdatedElement.textContent = 'Date parsing error';
+                console.error('Date parsing error:', error);
+            }
+        } else {
+            lastUpdatedElement.textContent = 'Not available';
+            console.log('No valid last updated time found');
+        }
+    } else {
+        console.error('file-last-updated element not found');
+    }
 }
 
 // Load teachers for teacher search dropdown
@@ -875,8 +956,34 @@ function showSection(sectionId) {
         if (sectionId === 'admin-panel') {
             initializeAdminPanel();
         }
-        
-        // Hide mini loader
+
+        // Handle about section initialization
+        if (sectionId === 'about') {
+            loadAboutSectionData();
+        }
+
+        // Handle teacher timetable export button
+        if (sectionId === 'teacher-timetable') {
+            // Trigger the mutation observer to add export button if teacher is selected
+            setTimeout(() => {
+                const container = document.getElementById('teacher-timetable-container');
+                const teacherSelect = document.getElementById('teacher-search');
+                const existingBtn = document.getElementById('export-teacher-btn');
+
+                if (container && teacherSelect) {
+                    const teacherSelected = teacherSelect.value && teacherSelect.value.trim() !== '';
+
+                    if (teacherSelected && !existingBtn) {
+                        const btn = document.createElement('button');
+                        btn.id = 'export-teacher-btn';
+                        btn.className = 'btn btn-outline-success mb-3';
+                        btn.innerHTML = '<i class="fas fa-download mr-2"></i>Export / Print Teacher Timetable';
+                        btn.onclick = exportTeacherTimetable;
+                        container.parentNode.insertBefore(btn, container);
+                    }
+                }
+            }, 100);
+        }        // Hide mini loader
         hideMiniLoader();
     }, 300);
 }
@@ -884,6 +991,29 @@ function showSection(sectionId) {
 // Admin Panel Functions
 function initializeAdminPanel() {
     checkAdminStatus();
+}
+
+// Load about section data
+function loadAboutSectionData() {
+    // Fetch fresh dashboard data for about section
+    fetch('/dashboard')
+        .then(response => response.json())
+        .then(data => {
+            updateAboutSectionData(data);
+        })
+        .catch(error => {
+            console.error('Error loading about section data:', error);
+            // Fallback: show error messages
+            const currentFileElement = document.getElementById('current-timetable-file');
+            const lastUpdatedElement = document.getElementById('file-last-updated');
+
+            if (currentFileElement) {
+                currentFileElement.textContent = 'Error loading data';
+            }
+            if (lastUpdatedElement) {
+                lastUpdatedElement.textContent = 'Error loading data';
+            }
+        });
 }
 
 function checkAdminStatus() {
@@ -1284,42 +1414,91 @@ function loadSections() {
         });
 }
 
-// -------------------- Export / Print for selected section --------------------
-function exportSectionTimetable() {
-    const sectionName = document.getElementById('section-search').value;
-    if (!sectionName) return alert('Select a section first');
+// -------------------- Export / Print for selected teacher --------------------
+function exportTeacherTimetable() {
+    const teacherName = document.getElementById('teacher-search').value;
+    if (!teacherName) {
+        alert('Please select a specific teacher to export their timetable. The export feature is not available when viewing all teachers.');
+        return;
+    }
 
     // Fetch the timetable and open new window for printing
-    fetch(`/timetable?name=${encodeURIComponent(sectionName)}&type=section`)
+    fetch(`/timetable?name=${encodeURIComponent(teacherName)}&type=teacher`)
         .then(r => r.json())
         .then(data => {
-            let html = `<html><head><title>${sectionName} Timetable</title>`;
+            if (data.length === 0) {
+                alert('No timetable data found for this teacher. Please select a different teacher.');
+                return;
+            }
+
+            // Sort the data
+            const sortedData = sortEntriesByDayAndTime(data);
+            const uniqueData = removeDuplicateEntries(sortedData);
+
+            let html = `<html><head><title>${teacherName} Timetable</title>`;
             html += '<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">';
-            html += '</head><body><div class="container"><h3>' + sectionName + ' Timetable</h3><table class="table table-bordered"><thead><tr><th>Day</th><th>Start</th><th>End</th><th>Location</th><th>Subject</th><th>Teacher</th></tr></thead><tbody>';
-            data.forEach(entry => {
-                html += `<tr><td>${entry.day}</td><td>${entry.start_time}</td><td>${entry.end_time}</td><td>${entry.location}</td><td>${entry.subject}</td><td>${entry.teachers}</td></tr>`;
+            html += '<style>body { font-family: Arial, sans-serif; margin: 20px; } .header { text-align: center; margin-bottom: 30px; } .timetable-table { width: 100%; border-collapse: collapse; margin-top: 20px; } .timetable-table th, .timetable-table td { border: 1px solid #ddd; padding: 8px; text-align: left; } .timetable-table th { background-color: #f8f9fa; font-weight: bold; } @media print { .no-print { display: none; } }</style>';
+            html += '</head><body>';
+            html += '<div class="header">';
+            html += '<h2>Superior University</h2>';
+            html += `<h3>${teacherName} - Teacher Timetable</h3>`;
+            html += `<p>Generated on: ${new Date().toLocaleDateString()}</p>`;
+            html += '</div>';
+            html += '<table class="timetable-table">';
+            html += '<thead><tr><th>Day</th><th>Time</th><th>Subject</th><th>Groups</th><th>Location</th></tr></thead><tbody>';
+
+            uniqueData.forEach(entry => {
+                const timeRange = `${entry.start_time} - ${entry.end_time}`;
+                // Format groups properly
+                let groupsDisplay = '';
+                if (Array.isArray(entry.groups)) {
+                    groupsDisplay = entry.groups.join(', ');
+                } else {
+                    groupsDisplay = entry.groups || 'N/A';
+                }
+                html += `<tr><td>${entry.day}</td><td>${timeRange}</td><td>${entry.subject}</td><td>${groupsDisplay}</td><td>${entry.location}</td></tr>`;
             });
-            html += '</tbody></table></div><script>window.onload=function(){window.print()}</script></body></html>';
+
+            html += '</tbody></table>';
+            html += '<div class="no-print" style="margin-top: 30px; text-align: center;">';
+            html += '<button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Print Timetable</button>';
+            html += '</div>';
+            html += '</body></html>';
+
             const w = window.open('', '_blank');
             w.document.write(html);
             w.document.close();
+        })
+        .catch(error => {
+            console.error('Error exporting teacher timetable:', error);
+            alert('Error exporting timetable. Please try again.');
         });
 }
 
-// Add export button to section timetable area
-const sectionContainerObserver = new MutationObserver(() => {
-    const container = document.getElementById('section-timetable-container');
-    if (!container) return;
-    if (!document.getElementById('export-section-btn')) {
+// Add export button to teacher timetable area
+const teacherContainerObserver = new MutationObserver(() => {
+    const container = document.getElementById('teacher-timetable-container');
+    const teacherSelect = document.getElementById('teacher-search');
+    const existingBtn = document.getElementById('export-teacher-btn');
+
+    if (!container || !teacherSelect) return;
+
+    const teacherSelected = teacherSelect.value && teacherSelect.value.trim() !== '';
+
+    if (teacherSelected && !existingBtn) {
+        // Add export button when a teacher is selected
         const btn = document.createElement('button');
-        btn.id = 'export-section-btn';
-        btn.className = 'btn btn-outline-primary mb-3';
-        btn.textContent = 'Export / Print Section Timetable';
-        btn.onclick = exportSectionTimetable;
+        btn.id = 'export-teacher-btn';
+        btn.className = 'btn btn-outline-success mb-3';
+        btn.innerHTML = '<i class="fas fa-download mr-2"></i>Export / Print Teacher Timetable';
+        btn.onclick = exportTeacherTimetable;
         container.parentNode.insertBefore(btn, container);
+    } else if (!teacherSelected && existingBtn) {
+        // Remove export button when no teacher is selected
+        existingBtn.remove();
     }
 });
-sectionContainerObserver.observe(document.body, { childList: true, subtree: true });
+teacherContainerObserver.observe(document.body, { childList: true, subtree: true });
 
 // Sort entries by day and time
 function sortEntriesByDayAndTime(entries) {

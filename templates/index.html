@@ -741,57 +741,6 @@
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 
     <script>
-    // Function to load current timetable file info
-    function loadTimetableInfo() {
-        fetch('/api/timetable-info')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('current-timetable-file').textContent = data.filename || 'No file loaded';
-                    document.getElementById('file-last-updated').textContent = data.last_updated || 'Unknown';
-                } else {
-                    document.getElementById('current-timetable-file').textContent = 'Error loading file info';
-                    document.getElementById('file-last-updated').textContent = 'Error loading date';
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching timetable info:', error);
-                document.getElementById('current-timetable-file').textContent = 'Error loading file info';
-                document.getElementById('file-last-updated').textContent = 'Error loading date';
-            });
-    }
-
-    // Load timetable info when about section is shown
-    function showSection(sectionName) {
-        // Hide all sections
-        document.querySelectorAll('.content-section').forEach(section => {
-            section.classList.remove('active');
-        });
-        
-        // Show selected section
-        const selectedSection = document.getElementById(sectionName);
-        if (selectedSection) {
-            selectedSection.classList.add('active');
-        }
-        
-        // Update active menu item
-        document.querySelectorAll('.sidebar-menu a').forEach(link => {
-            link.classList.remove('active');
-        });
-        document.querySelector(`[data-section="${sectionName}"]`).classList.add('active');
-        
-        // Load timetable info when about section is shown
-        if (sectionName === 'about') {
-            loadTimetableInfo();
-        }
-        
-        // Close sidebar on mobile after selection
-        if (window.innerWidth <= 768) {
-            document.getElementById('sidebar').classList.remove('active');
-            document.getElementById('overlay').classList.remove('active');
-        }
-    }
-
     // CGPA Calculator JavaScript
     let subjectCount = 1;
 
