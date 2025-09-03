@@ -840,6 +840,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 20px;
+    cursor: pointer; /* Allow clicking outside to close */
 }
 
 .class-selector-content {
@@ -851,6 +852,7 @@ body {
     box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
     position: relative;
     animation: modalSlideUp 0.3s ease-out;
+    cursor: default; /* Prevent closing when clicking content */
 }
 
 [data-bs-theme="dark"] .class-selector-content {

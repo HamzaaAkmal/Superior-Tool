@@ -251,24 +251,58 @@ function loadTeachers() {
 function checkClassSelectionModal() {
     const selectedClass = localStorage.getItem('selectedClass');
     if (!selectedClass) {
-        // Show modal after a short delay
+        // Show modal after page loads completely
         setTimeout(() => {
             showClassSelectionModal();
-        }, 1000);
+        }, 1500); // Increased delay to ensure page is fully loaded
     } else {
         // Load next class for selected class
         updateNextClassForSelectedClass(selectedClass);
+
+        // Update dashboard selector if it exists
+        const dashboardSelect = document.getElementById('dashboardClassSelect');
+        if (dashboardSelect) {
+            // Wait for dashboard selector to be populated
+            setTimeout(() => {
+                dashboardSelect.value = selectedClass;
+                document.getElementById('selectedClassInfo').style.display = 'block';
+            }, 500);
+        }
     }
 }
 
 // Show class selection modal
 function showClassSelectionModal() {
+    // Show loading state first
+    const modal = document.getElementById('classSelectionModal');
+    const select = document.getElementById('modalClassSelect');
+
+    if (!modal || !select) return;
+
+    // Show modal immediately with loading state
+    modal.style.display = 'flex';
+    select.innerHTML = '<option value="">Loading classes...</option>';
+
+    // Add click outside to close functionality
+    modal.onclick = function(event) {
+        if (event.target === modal) {
+            skipClassSelection();
+        }
+    };
+
+    // Add keyboard support (Escape key)
+    document.addEventListener('keydown', function handleEscape(event) {
+        if (event.key === 'Escape' && modal.style.display === 'flex') {
+            skipClassSelection();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    });
+
     fetch('/get_sections')
         .then(response => response.json())
         .then(sections => {
-            const select = document.getElementById('modalClassSelect');
             if (!select) return;
-            
+
             select.innerHTML = '<option value="">Select your class...</option>';
             sections.forEach(section => {
                 const option = document.createElement('option');
@@ -276,21 +310,25 @@ function showClassSelectionModal() {
                 option.textContent = section;
                 select.appendChild(option);
             });
-            
+
             // Trigger Select2 update for modal
             $('#modalClassSelect').trigger('change');
-            
+
             // Also populate dashboard selector
             populateDashboardClassSelector(sections);
-            
-            document.getElementById('classSelectionModal').style.display = 'flex';
+
+            // Focus on the select element for better UX
+            setTimeout(() => {
+                select.focus();
+            }, 100);
         })
         .catch(error => {
             console.error('Error loading sections for modal:', error);
+            // Hide modal on error and show error message
+            modal.style.display = 'none';
+            alert('Error loading class list. Please refresh the page.');
         });
-}
-
-// Populate dashboard class selector
+}// Populate dashboard class selector
 function populateDashboardClassSelector(sections) {
     const select = document.getElementById('dashboardClassSelect');
     if (!select) return;
@@ -331,30 +369,59 @@ function populateDashboardClassSelector(sections) {
 function saveSelectedClass() {
     const select = document.getElementById('modalClassSelect');
     if (!select) return;
-    
+
     const selectedClass = select.value;
     if (!selectedClass) {
-        alert('Please select a class');
+        alert('Please select a class first');
         return;
     }
-    
+
+    // Save to localStorage
     localStorage.setItem('selectedClass', selectedClass);
-    document.getElementById('classSelectionModal').style.display = 'none';
-    
-    // Update dashboard
-    updateNextClassForSelectedClass(selectedClass);
-    
+
+    // Hide modal
+    const modal = document.getElementById('classSelectionModal');
+    if (modal) {
+        modal.style.display = 'none';
+        // Clean up event listeners
+        modal.onclick = null;
+    }
+
     // Update dashboard selector
     const dashboardSelect = document.getElementById('dashboardClassSelect');
     if (dashboardSelect) {
         dashboardSelect.value = selectedClass;
-        document.getElementById('selectedClassInfo').style.display = 'block';
+        $('#dashboardClassSelect').trigger('change');
     }
+
+    // Show selected class info
+    const selectedClassInfo = document.getElementById('selectedClassInfo');
+    if (selectedClassInfo) {
+        selectedClassInfo.style.display = 'block';
+    }
+
+    // Update next class display
+    updateNextClassForSelectedClass(selectedClass);
+
+    // Update section badge if it exists
+    const selectedSectionBadge = document.getElementById('selected-section-name');
+    if (selectedSectionBadge) {
+        selectedSectionBadge.textContent = selectedClass;
+        selectedSectionBadge.style.display = 'inline-block';
+    }
+
+    // Show success message
+    alert('Class selected successfully! Your dashboard has been updated.');
 }
 
 // Skip class selection
 function skipClassSelection() {
-    document.getElementById('classSelectionModal').style.display = 'none';
+    const modal = document.getElementById('classSelectionModal');
+    if (modal) {
+        modal.style.display = 'none';
+        // Clean up event listeners
+        modal.onclick = null;
+    }
 }
 
 // Update dashboard when class is selected
