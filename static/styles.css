@@ -1882,7 +1882,7 @@ body {
 }
 
 [data-bs-theme="dark"] .modern-schedule-item .time {
-    color: #000000;
+    color: #000000 !important;
     background: #ffffff;
     border: 2px solid #ffffff;
     text-shadow: none;
@@ -1894,7 +1894,7 @@ body {
 
 [data-bs-theme="dark"] .modern-schedule-item .location {
     background: #ffffff;
-    color: #000000;
+    color: #000000 !important;
     box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
 }
 
