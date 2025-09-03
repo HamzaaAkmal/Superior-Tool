@@ -115,6 +115,29 @@ $(document).ready(function() {
             }
         }, 100);
     }
+
+    // Check if section timetable section is currently visible and add export button if section selected
+    const sectionSection = document.getElementById('section-timetable');
+    if (sectionSection && sectionSection.classList.contains('active')) {
+        setTimeout(() => {
+            const container = document.getElementById('section-timetable-container');
+            const sectionSelect = document.getElementById('section-search');
+            const existingBtn = document.getElementById('export-section-btn');
+
+            if (container && sectionSelect) {
+                const sectionSelected = sectionSelect.value && sectionSelect.value.trim() !== '';
+
+                if (sectionSelected && !existingBtn) {
+                    const btn = document.createElement('button');
+                    btn.id = 'export-section-btn';
+                    btn.className = 'btn btn-outline-success mb-3';
+                    btn.innerHTML = '<i class="fas fa-download mr-2"></i>Export / Print Section Timetable';
+                    btn.onclick = exportSectionTimetable;
+                    container.parentNode.insertBefore(btn, container);
+                }
+            }
+        }, 100);
+    }
 });
 
 // Load dashboard data
@@ -983,6 +1006,29 @@ function showSection(sectionId) {
                     }
                 }
             }, 100);
+        }
+
+        // Handle section timetable export button
+        if (sectionId === 'section-timetable') {
+            // Trigger the mutation observer to add export button if section is selected
+            setTimeout(() => {
+                const container = document.getElementById('section-timetable-container');
+                const sectionSelect = document.getElementById('section-search');
+                const existingBtn = document.getElementById('export-section-btn');
+
+                if (container && sectionSelect) {
+                    const sectionSelected = sectionSelect.value && sectionSelect.value.trim() !== '';
+
+                    if (sectionSelected && !existingBtn) {
+                        const btn = document.createElement('button');
+                        btn.id = 'export-section-btn';
+                        btn.className = 'btn btn-outline-success mb-3';
+                        btn.innerHTML = '<i class="fas fa-download mr-2"></i>Export / Print Section Timetable';
+                        btn.onclick = exportSectionTimetable;
+                        container.parentNode.insertBefore(btn, container);
+                    }
+                }
+            }, 100);
         }        // Hide mini loader
         hideMiniLoader();
     }, 300);
@@ -1445,7 +1491,7 @@ function exportTeacherTimetable() {
             html += `<p>Generated on: ${new Date().toLocaleDateString()}</p>`;
             html += '</div>';
             html += '<table class="timetable-table">';
-            html += '<thead><tr><th>Day</th><th>Time</th><th>Subject</th><th>Groups</th><th>Location</th></tr></thead><tbody>';
+            html += '<thead><tr><th>Day</th><th>Time</th><th>Subject</th><th>Groups</th><th>Teacher</th><th>Location</th></tr></thead><tbody>';
 
             uniqueData.forEach(entry => {
                 const timeRange = `${entry.start_time} - ${entry.end_time}`;
@@ -1456,7 +1502,8 @@ function exportTeacherTimetable() {
                 } else {
                     groupsDisplay = entry.groups || 'N/A';
                 }
-                html += `<tr><td>${entry.day}</td><td>${timeRange}</td><td>${entry.subject}</td><td>${groupsDisplay}</td><td>${entry.location}</td></tr>`;
+                // Always use the selected teacher name for teacher timetables
+                html += `<tr><td>${entry.day}</td><td>${timeRange}</td><td>${entry.subject}</td><td>${groupsDisplay}</td><td>${teacherName}</td><td>${entry.location}</td></tr>`;
             });
 
             html += '</tbody></table>';
@@ -1474,6 +1521,85 @@ function exportTeacherTimetable() {
             alert('Error exporting timetable. Please try again.');
         });
 }
+
+// -------------------- Export / Print for selected section --------------------
+function exportSectionTimetable() {
+    const sectionName = document.getElementById('section-search').value;
+    if (!sectionName) {
+        alert('Please select a specific section to export their timetable. The export feature is not available when viewing all sections.');
+        return;
+    }
+
+    // Fetch the timetable and open new window for printing
+    fetch(`/timetable?name=${encodeURIComponent(sectionName)}&type=section`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.length === 0) {
+                alert('No timetable data found for this section. Please select a different section.');
+                return;
+            }
+
+            // Sort the data
+            const sortedData = sortEntriesByDayAndTime(data);
+            const uniqueData = removeDuplicateEntries(sortedData);
+
+            let html = `<html><head><title>${sectionName} Timetable</title>`;
+            html += '<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">';
+            html += '<style>body { font-family: Arial, sans-serif; margin: 20px; } .header { text-align: center; margin-bottom: 30px; } .timetable-table { width: 100%; border-collapse: collapse; margin-top: 20px; } .timetable-table th, .timetable-table td { border: 1px solid #ddd; padding: 8px; text-align: left; } .timetable-table th { background-color: #f8f9fa; font-weight: bold; } @media print { .no-print { display: none; } }</style>';
+            html += '</head><body>';
+            html += '<div class="header">';
+            html += '<h2>Superior University</h2>';
+            html += `<h3>${sectionName} - Section Timetable</h3>`;
+            html += `<p>Generated on: ${new Date().toLocaleDateString()}</p>`;
+            html += '</div>';
+            html += '<table class="timetable-table">';
+            html += '<thead><tr><th>Day</th><th>Time</th><th>Subject</th><th>Teacher</th><th>Location</th></tr></thead><tbody>';
+
+            uniqueData.forEach(entry => {
+                const timeRange = `${entry.start_time} - ${entry.end_time}`;
+                html += `<tr><td>${entry.day}</td><td>${timeRange}</td><td>${entry.subject}</td><td>${entry.teacher || 'N/A'}</td><td>${entry.location}</td></tr>`;
+            });
+
+            html += '</tbody></table>';
+            html += '<div class="no-print" style="margin-top: 30px; text-align: center;">';
+            html += '<button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Print Timetable</button>';
+            html += '</div>';
+            html += '</body></html>';
+
+            const w = window.open('', '_blank');
+            w.document.write(html);
+            w.document.close();
+        })
+        .catch(error => {
+            console.error('Error exporting section timetable:', error);
+            alert('Error exporting timetable. Please try again.');
+        });
+}
+
+// Add export button to section timetable area
+const sectionContainerObserver = new MutationObserver(() => {
+    const container = document.getElementById('section-timetable-container');
+    const sectionSelect = document.getElementById('section-search');
+    const existingBtn = document.getElementById('export-section-btn');
+
+    if (!container || !sectionSelect) return;
+
+    const sectionSelected = sectionSelect.value && sectionSelect.value.trim() !== '';
+
+    if (sectionSelected && !existingBtn) {
+        // Add export button when a section is selected
+        const btn = document.createElement('button');
+        btn.id = 'export-section-btn';
+        btn.className = 'btn btn-outline-success mb-3';
+        btn.innerHTML = '<i class="fas fa-download mr-2"></i>Export / Print Section Timetable';
+        btn.onclick = exportSectionTimetable;
+        container.parentNode.insertBefore(btn, container);
+    } else if (!sectionSelected && existingBtn) {
+        // Remove export button when no section is selected
+        existingBtn.remove();
+    }
+});
+sectionContainerObserver.observe(document.body, { childList: true, subtree: true });
 
 // Add export button to teacher timetable area
 const teacherContainerObserver = new MutationObserver(() => {
@@ -1499,8 +1625,6 @@ const teacherContainerObserver = new MutationObserver(() => {
     }
 });
 teacherContainerObserver.observe(document.body, { childList: true, subtree: true });
-
-// Sort entries by day and time
 function sortEntriesByDayAndTime(entries) {
     const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     
@@ -1766,11 +1890,23 @@ function loadSectionTimetable() {
 function clearTeacherSelection() {
     $('#teacher-search').val(null).trigger('change');
     loadAllTeacherTimetables();
+    
+    // Remove export button when selection is cleared
+    const existingBtn = document.getElementById('export-teacher-btn');
+    if (existingBtn) {
+        existingBtn.remove();
+    }
 }
 
 function clearSectionSelection() {
     $('#section-search').val(null).trigger('change');
     document.getElementById('section-timetable-container').innerHTML = '<div class="text-center text-muted"><i class="fas fa-info-circle fa-2x mb-3"></i><p>Please select a section to view its timetable.</p></div>';
+    
+    // Remove export button when selection is cleared
+    const existingBtn = document.getElementById('export-section-btn');
+    if (existingBtn) {
+        existingBtn.remove();
+    }
 }
 
 // Loading state for buttons
