@@ -147,11 +147,9 @@ function loadDashboardData() {
         .then(data => {
             // Update dashboard elements
             const totalTeachers = document.getElementById('total-teachers');
-            const currentSession = document.getElementById('current-session');
             const teacherCount = document.getElementById('teacher-count');
 
             if (totalTeachers) totalTeachers.textContent = data.teacher_count || 0;
-            if (currentSession) currentSession.textContent = data.semester_info || 'No Data';
             if (teacherCount) teacherCount.textContent = `${data.teacher_count || 0} Teachers`;
 
             // Update about section elements if they exist
