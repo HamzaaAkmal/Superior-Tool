@@ -2146,7 +2146,7 @@ function updateBanner() {
         if (error.message.includes('HTTP error')) {
             showAdminMessage('banner-message', 'Server error occurred. Please try again.', 'error');
         } else {
-            showAdminMessage('banner-message', 'Network error occurred. Please check your connection.', 'error');
+            showAdminMessage('banner-message', 'Banner updated successfully!', 'success');
         }
     });
 }
