@@ -617,10 +617,13 @@ function loadDaySchedule() {
 function displayDaySchedule(data, selectedDay) {
     // Filter for selected day's classes
     const dayClasses = data.filter(item => item.day === selectedDay);
+
+    // Remove duplicate entries
+    const uniqueDayClasses = removeDuplicateEntries(dayClasses);
     
     const scheduleBody = document.getElementById('day-schedule-body');
     
-    if (dayClasses.length === 0) {
+    if (uniqueDayClasses.length === 0) {
         scheduleBody.innerHTML = `
             <div class="text-center py-4">
                 <i class="fas fa-beach-parasol fa-3x mb-3 text-success"></i>
@@ -632,13 +635,13 @@ function displayDaySchedule(data, selectedDay) {
     }
     
     // Sort by start time
-    dayClasses.sort((a, b) => {
+    uniqueDayClasses.sort((a, b) => {
         return timeToMinutes(a.start_time) - timeToMinutes(b.start_time);
     });
     
     // Display schedule
     let scheduleHtml = '<ul class="modern-schedule-list">';
-    dayClasses.forEach((classItem, index) => {
+    uniqueDayClasses.forEach((classItem, index) => {
         scheduleHtml += `
             <li class="modern-schedule-item" data-class-time="${classItem.start_time}">
                 <div class="left">
