@@ -52,6 +52,15 @@ def init_db():
             initialized INTEGER DEFAULT 0
         )
     ''')
+    # Create current_file table to persist the active timetable file
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS current_file (
+            id INTEGER PRIMARY KEY,
+            file_path TEXT UNIQUE,
+            file_type TEXT,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     conn.commit()
 
     cur.execute('SELECT COUNT(*) as cnt FROM admin')
@@ -98,6 +107,29 @@ def save_admin_credentials(username, password_hash, initialized=True):
                     (username, password_hash, 1 if initialized else 0))
     conn.commit()
     conn.close()
+
+
+def save_current_file(file_path, file_type='csv'):
+    """Save the current active file to database"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    # Delete existing entry and insert new one
+    cur.execute('DELETE FROM current_file')
+    cur.execute('INSERT INTO current_file (file_path, file_type) VALUES (?, ?)',
+                (file_path, file_type))
+    conn.commit()
+    conn.close()
+
+def load_current_file():
+    """Load the current active file from database"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT file_path, file_type FROM current_file ORDER BY uploaded_at DESC LIMIT 1')
+    row = cur.fetchone()
+    conn.close()
+    if row:
+        return row['file_path'], row['file_type']
+    return None, None
 
 # Initialize folder structure
 create_folder_structure()
@@ -173,27 +205,40 @@ def convert_xlsx_to_csv():
 def get_current_csv_file():
     """Get the current CSV file to use"""
     global current_csv_file
-    
-    # Check if we need to convert xlsx to csv
+
+    # First, try to load from database (persisted file)
+    persisted_file, file_type = load_current_file()
+    if persisted_file and os.path.exists(persisted_file):
+        current_csv_file = persisted_file
+        return current_csv_file
+
+    # If no persisted file, check if we need to convert xlsx to csv
     latest_xlsx = get_latest_xlsx_file()
     if latest_xlsx:
         expected_csv = 'uploads/csv/' + os.path.splitext(os.path.basename(latest_xlsx))[0] + '.csv'
-        
+
         # Convert if CSV doesn't exist or xlsx is newer
         if not os.path.exists(expected_csv) or os.path.getmtime(latest_xlsx) > os.path.getmtime(expected_csv):
             print("Converting latest xlsx to csv...")
             converted_csv = convert_xlsx_to_csv()
             if converted_csv:
                 current_csv_file = converted_csv
+                # Save to database for persistence
+                save_current_file(converted_csv, 'csv')
         else:
             current_csv_file = expected_csv
-    
-    # Fallback to any existing CSV in csv folder
+            # Save to database for persistence
+            save_current_file(expected_csv, 'csv')
+
+    # Fallback to any existing CSV in csv folder (only if no persisted file)
     if not current_csv_file or not os.path.exists(current_csv_file):
         csv_files = glob.glob('uploads/csv/*.csv')
         if csv_files:
+            # Sort by modification time and pick the most recent
             current_csv_file = max(csv_files, key=os.path.getmtime)
-    
+            # Save to database for persistence
+            save_current_file(current_csv_file, 'csv')
+
     return current_csv_file
 
 
@@ -349,6 +394,8 @@ def admin_upload():
             converted = convert_xlsx_to_csv()
             if converted:
                 process_file(converted)
+                # Save as current file for persistence
+                save_current_file(converted, 'csv')
                 return jsonify({'success': True, 'message': 'Excel file uploaded, converted to CSV, and processed successfully'})
             else:
                 return jsonify({'success': False, 'message': 'Failed to convert Excel file to CSV'}), 500
@@ -359,6 +406,8 @@ def admin_upload():
             converted = convert_xlsx_to_csv()
             if converted:
                 process_file(converted)
+                # Save as current file for persistence
+                save_current_file(converted, 'csv')
                 return jsonify({'success': True, 'message': 'Excel file uploaded, converted to CSV, and processed successfully'})
             else:
                 return jsonify({'success': False, 'message': 'Failed to convert Excel file to CSV'}), 500
@@ -366,6 +415,8 @@ def admin_upload():
             save_path = os.path.join('uploads', 'csv', filename)
             f.save(save_path)
             process_file(save_path)
+            # Save as current file for persistence
+            save_current_file(save_path, 'csv')
             return jsonify({'success': True, 'message': 'CSV file uploaded and processed successfully'})
         else:
             return jsonify({'success': False, 'message': 'Unsupported file type. Please upload .csv, .xls, or .xlsx files'}), 400
